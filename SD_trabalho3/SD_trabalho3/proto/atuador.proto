@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+service atuadorService{
+	rpc sendInfo(command) returns (status){};
+}
+
+message command{
+	int32 info = 1;
+}
+
+message status{
+	int32 codigo = 1;
+	string nome = 2;
+	string mensagem = 3;
+}
