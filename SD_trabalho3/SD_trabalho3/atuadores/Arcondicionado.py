@@ -3,6 +3,7 @@ import time
 import grpc
 import atuador_pb2_grpc as pb2_grpc
 import atuador_pb2 as pb2
+import json
 
 class atuadorServiceServicer(pb2_grpc.atuadorServiceServicer):
     def __init__(self):
@@ -12,11 +13,13 @@ class atuadorServiceServicer(pb2_grpc.atuadorServiceServicer):
     def sendInfo(self, request, context):
         global Status
         comando = request.info
-        if(comando == 1):
+        if comando == 1:
             Status = "Ligado"
         else:
             Status = "Desligado"
-        print(comando)
+        
+        print("Status atual: ",Status)
+        
         response = pb2.status(codigo = self.codigo, nome = self.nome, mensagem = Status)
         return response
 

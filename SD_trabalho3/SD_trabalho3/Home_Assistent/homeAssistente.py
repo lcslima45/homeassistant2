@@ -1,26 +1,25 @@
-
 import grpc
 import time
 import atuador_pb2_grpc as pb2_grpc
 import atuador_pb2 as pb2
 import socket
+import threading as th
 
 localIP = "127.0.0.1"
-localPort  = 20001
+commandPort  = 5000
+responsePort = 5001
 bufferSize = 1024
-print("UDP server up and listening")
-UDPServerSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-UDPServerSocket.bind((localIP, localPort))
-bytesAddressPair = UDPServerSocket.recvfrom(bufferSize)
-message = bytesAddressPair[0]
-address = bytesAddressPair[1]
+adminAddress = None
 
+commandSocket = socket.socket(family = socket.AF_INET, type = socket.SOCK_DGRAM)
+responseSocket = socket.socket(family = socket.AF_INET, type = socket.SOCK_DGRAM)
 
-clientMsg = "Message from Client:{}".format(message)
-clientIP  = "Client IP Address:{}".format(address)
+commandSocket.bind((localIP, commandPort))
+responseSocket.bind((localIP, responsePort))
 
-print('Home Assistente Ligado');
+print('Home Assistente Ligado')
 
+#configuração de conexão com serviços de atuadores ============================================
 channelAR = grpc.insecure_channel('localhost:50051')
 Arcondicionado = pb2_grpc.atuadorServiceStub(channelAR)
 
@@ -30,40 +29,96 @@ lampada = pb2_grpc.atuadorServiceStub(chanelLuz)
 channelAlarme = grpc.insecure_channel('localhost:50053')
 alarme = pb2_grpc.atuadorServiceStub(channelAlarme)
 
-while True:
-    #chegada de dados de sensor:
-    codigo = 1000
-    valor = 30
-    hora = ""
 
+def getConexionFromClient():
+    print("Aguardando Conexão do cliente")
+    bytesNewClient = responseSocket.recvfrom(bufferSize)
+    messageClient = bytesNewClient[0]
+    adminAddress = bytesNewClient[1]
+    clientMsg = format(messageClient)
+    clientIP  = format(adminAddress)
+    print(clientIP," ",clientMsg)
 
-    #====================================================
-    print("leitura seensor: ",codigo," ",valor," ",hora)
-
-    if codigo == 1000:
-        if valor >= 25:
-            comando = pb2.command(info = 1)
+def rootCommandoToAtuador(codigoRec, comandoRec):
+    print("root Chamado!")
+    if codigoRec == 1000:
+        if comandoRec == 1 or comandoRec == 0:
+            comando = pb2.command(info = comandoRec)
             resp = Arcondicionado.sendInfo(comando)
-        elif valor <= 17:
-            comando = pb2.command(info = 0)
-            resp = Arcondicionado.sendInfo(comando) 
-    
-    if codigo == 2000:
-        if valor <= 40:
-            comando = pb2.command(info = 1)
+        else:
+             resp = "Comando enviado invalido"
+
+    elif codigoRec == 2000:
+        if comandoRec == 1 or comandoRec == 0:
+            comando = pb2.command(info = comandoRec)
             resp = lampada.sendInfo(comando)
         else:
-            comando = pb2.command(info = 0)
-            resp = lampada.sendInfo(comando) 
-
-    if codigo == 3000:
-        if valor == 1:
-            comando = pb2.command(info = 1)
+             resp = "Comando enviado invalido"  
+        
+    elif codigoRec == 3000:
+        if comandoRec == 1 or comandoRec == 0:
+            comando = pb2.command(info = comandoRec)
             resp = alarme.sendInfo(comando)
         else:
-            comando = pb2.command(info = 0)
-            resp = alarme.sendInfo(comando)
+             resp = "Comando enviado invalido"
 
-    msgFromServer = resp
-    bytesToSend = str.encode(msgFromServer)
-    UDPServerSocket.sendto(bytesToSend, address)
+    else:
+        if(comandoRec == 0 or comandoRec == 1):
+            resp = "O codigo enviado não coorresponde a nenhum atuador"  
+    
+    print(resp)
+    
+    global adminAddress
+    if(adminAddress != None):
+        msgFromServer = resp
+        bytesToSend = str.encode(msgFromServer)
+        responseSocket.sendto(bytesToSend, adminAddress)
+
+
+def receiveCommandFromClient():
+    print("Aguardando Comando do cliente")
+    while True:
+        bytesCommand = commandSocket.recvfrom(bufferSize)
+        messageCommand = bytesCommand[0]
+        addressSenderCommand = [1]
+        clientMsg = format(messageCommand)
+        clientIP  = format(addressSenderCommand)
+        print(clientIP," ",clientMsg)
+
+
+def receiveDataFromSensor():
+    print("Aguardando dados do sensor")
+    while True:
+        #chegada de dados de sensor:
+        time.sleep(99999)
+        codigo = 1000;
+        valor = 30
+        hora = ""
+        #====================================================
+        print("leitura sensor: ",codigo," ",valor," ",hora)
+               
+        if codigo == 1000:
+            if valor >= 25:
+                rootCommandoToAtuador(codigoRec = codigo, comandoRec = 1)
+            elif valor <= 17:
+                rootCommandoToAtuador(codigoRec = codigo, comandoRec = 0)
+     
+        if codigo == 2000:
+            if valor <= 40:
+                rootCommandoToAtuador(codigoRec = codigo, comandoRec = 1)
+            else:
+                rootCommandoToAtuador(codigoRec = codigo, comandoRec = 0)
+        
+        if codigo == 3000:
+            if valor == 1:
+                rootCommandoToAtuador(codigoRec = codigo, comandoRec = 1)
+            else:
+                rootCommandoToAtuador(codigoRec = codigo, comandoRec = 1)
+
+
+#=====================================================================================================
+th.Thread(target = getConexionFromClient).start()
+th.Thread(target = receiveCommandFromClient).start()
+th.Thread(target = receiveDataFromSensor).start()
+
+print("its are working")

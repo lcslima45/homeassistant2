@@ -16,7 +16,9 @@ class atuadorServiceServicer(pb2_grpc.atuadorServiceServicer):
             Status = "Ligado"
         else:
             Status = "Desligado"
-        print(comando)
+
+        print("Status atual: ",Status)
+        
         response = pb2.status(codigo = self.codigo, nome = self.nome, mensagem = Status)
         return response
 
