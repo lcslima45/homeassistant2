@@ -16,7 +16,7 @@ server.listen();
 
 clients = []
 
-#=====================Configuração de conexão com serviços de atuadores =================================
+#=========================Configuração de conexão com serviços de atuadores =================================
 channelAR = grpc.insecure_channel('localhost:50051')
 Arcondicionado = pb2_grpc.atuadorServiceStub(channelAR)
 
@@ -26,7 +26,8 @@ lampada = pb2_grpc.atuadorServiceStub(chanelLuz)
 channelAlarme = grpc.insecure_channel('localhost:50053')
 alarme = pb2_grpc.atuadorServiceStub(channelAlarme)
 
-#====================Roteamento de comandos para Atuadores====================
+
+#==================================Roteamento de comandos para Atuadores=============================
 
 def rootCommandoToAtuador(codigoRec, comandoRec):
     
@@ -89,8 +90,6 @@ def sendSensorDataToAtuador(codigo, valorLido):
     elif codigo == 3000:
         if valorLido == 1:
             rootCommandoToAtuador(codigoRec=codigo, comandoRec=1)
-            print("Comando enviado")
-
         else:
             rootCommandoToAtuador(codigoRec=codigo, comandoRec=0)
 
@@ -130,14 +129,34 @@ def receiveClient():
         th.Thread(target = handle, args = (client, )).start()
 
 
+
 #================================Conexão com sensores=============================================
 
-def receiveDataFromSensor():
+def receiveDataFromSensorTemp():
    
     connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
-    channel = connection.channel()
+    channelTemp = connection.channel()
+    channelTemp.queue_declare(queue='sensor_Temperatura')
 
-    channel.queue_declare(queue='nemo')
+    def callback(ch, method, properties, body):
+        broadcast(body)
+        datafromSensor = body.decode('ascii')
+        datafromSensor= json.loads(datafromSensor)
+        print("Sensor: ",datafromSensor)
+
+        cod = datafromSensor[1]
+        val = datafromSensor[2]
+        sendSensorDataToAtuador(codigo = cod, valorLido = val)
+
+    channelTemp.basic_consume(queue='sensor_Temperatura', on_message_callback=callback, auto_ack=True)    
+    channelTemp.start_consuming()
+
+
+def receiveDataFromSensorLum():
+   
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+    channelLum = connection.channel()
+    channelLum.queue_declare(queue='sensor_Luminosidade')
 
     def callback(ch, method, properties, body):
         broadcast(body)
@@ -150,16 +169,36 @@ def receiveDataFromSensor():
         sendSensorDataToAtuador(codigo = cod, valorLido = val)
 
 
-    channel.basic_consume(queue='nemo', on_message_callback=callback, auto_ack=True)
-
-    print("Aguardando dados dos sensores")
+    channelLum.basic_consume(queue='sensor_Luminosidade', on_message_callback=callback, auto_ack=True)
     
-    channel.start_consuming()
-        
-th.Thread(target = receiveDataFromSensor).start()
+    channelLum.start_consuming()
+
+
+def receiveDataFromSensorEnv():
+   
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+    channelEnv = connection.channel()
+    channelEnv.queue_declare(queue='sensor_Envasao')
+
+    def callback(ch, method, properties, body):
+        broadcast(body)
+        datafromSensor = body.decode('ascii')
+        datafromSensor= json.loads(datafromSensor)
+        print("Sensor: ",datafromSensor)
+
+        cod = datafromSensor[1]
+        val = datafromSensor[2]
+        sendSensorDataToAtuador(codigo = cod, valorLido = val)
+
+
+    channelEnv.basic_consume(queue='sensor_Envasao', on_message_callback=callback, auto_ack=True)
+    
+    channelEnv.start_consuming()
+
+
+th.Thread(target = receiveDataFromSensorTemp).start()
+th.Thread(target = receiveDataFromSensorLum).start()
+th.Thread(target = receiveDataFromSensorEnv).start()
 
 print("Servidor Escutando....")
 receiveClient()
-
-
-
